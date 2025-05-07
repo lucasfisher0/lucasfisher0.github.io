@@ -3,6 +3,8 @@ layout: home
 toc: true
 ---
 
+If you're seeing this, the github pages hook is functional.
+
 ### Some great heading (h2)
 
 This is the home page.
