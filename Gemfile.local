@@ -1,0 +1,4 @@
+eval_gemfile 'Gemfile'
+
+# Install via BUNDLE_GEMFILE=Gemfile.local bundle install
+# add your local gems here

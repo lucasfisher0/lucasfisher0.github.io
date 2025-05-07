@@ -1,0 +1,303 @@
+<div id="lightPull">
+  <canvas id="lightPullCanvas" width="160" height="175"></canvas>
+</div>
+
+<script>
+  const metaTag = document.getElementById("main-stylesheet");
+  let SSHref = metaTag.href;
+  let SSName = SSHref.substring(SSHref.lastIndexOf('/') + 1);
+  let prevSkin = localStorage.getItem("minima-ss");
+
+  if (prevSkin)
+    metaTag.href = SSHref.replace(SSName, prevSkin);
+  else
+    changeSkin("dark.css")
+
+  function changeSkin(_ssName) {
+    metaTag.href = SSHref.replace(SSName, _ssName);
+    localStorage.setItem("minima-ss", _ssName);
+  }
+</script>
+
+<script>
+  class Point {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.startX = x;
+      this.startY = y;
+      this.oldX = x;
+      this.oldY = y;
+      this.pinned = false;
+    }
+
+    update(deltaTime) {
+      let velocityX = (this.x - this.oldX);
+      let velocityY = (this.y - this.oldY);
+
+      this.oldX = this.x;
+      this.oldY = this.y;
+      this.x += velocityX;
+      this.y += velocityY;
+
+      this.y += gravity * deltaTime * deltaTime;
+    }
+  }
+
+  class Stick {
+    constructor(pointA, pointB, length) {
+      this.pointA = pointA;
+      this.pointB = pointB;
+      this.length = length;
+    }
+
+    constrain() {
+      let dx = this.pointB.x - this.pointA.x;
+      let dy = this.pointB.y - this.pointA.y;
+      let distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance > segmentMaxLength)
+        distance = segmentMaxLength;
+      let difference = this.length - distance;
+
+      let percent = difference / distance / 2;
+      let offsetX = dx * percent;
+      let offsetY = dy * percent;
+
+      if (!this.pointA.pinned) {
+        this.pointA.x -= offsetX;
+        this.pointA.y -= offsetY;
+
+      }
+      if (!this.pointB.pinned) {
+        this.pointB.x += offsetX;
+        this.pointB.y += offsetY;
+      }
+    }
+
+    reverseConstrain() {
+      let dx = this.pointA.x - this.pointb.x;
+      let dy = this.pointA.y - this.pointb.y;
+      let distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance > segmentMaxLength)
+        distance = segmentMaxLength;
+      let difference = this.length - distance;
+
+      let percent = difference / distance / 2;
+      let offsetX = dx * percent;
+      let offsetY = dy * percent;
+
+      if (!this.pointB.pinned) {
+        this.pointB.x -= offsetX;
+        this.pointB.y -= offsetY;
+      }
+      if (!this.pointA.pinned) {
+        this.pointA.x += offsetX;
+        this.pointA.y += offsetY;
+      }
+    }
+  }
+
+  const canvas = document.getElementById('lightPullCanvas');
+  const ctx = canvas.getContext('2d');
+
+  /* Don't look at any of this, it was all an exercise in procrastination and is really sloppy.
+  I am honored to waste your CPU to make this a reality. */
+  
+  let clearNavbox = false;
+  function WidthChange(mq) {
+    clearNavbox = mq.matches;
+  }
+
+  const navbox = document.getElementsByClassName('site-nav').item(0);
+  let mq = window.matchMedia("(max-width: 600px)");
+  mq.addListener(WidthChange);
+  WidthChange(mq);
+
+  const points = [];
+  const sticks = [];
+  const numPoints = 6;
+  const beadRadius = 4;
+  const segmentLength = 15;
+  const segmentMaxLength = 35;
+  const gravity = 10;
+  const iterations = 5;
+
+  const startX = (canvas.clientWidth / 2) + 10;
+
+  let lastTime = 0;
+  let timeSincePull = 0;
+  let sleep = true;
+
+  for (let i = 0; i < numPoints; i++) {
+    points.push(new Point(startX, 5 + i * segmentLength));
+  }
+
+  for (let i = 0; i < numPoints - 1; i++) {
+    sticks.push(new Stick(points[i], points[i + 1], segmentLength));
+  }
+
+  let activePull = false;
+  let pullPoint = new Point(0, 0);
+  let mousePoint = new Point(0, 0);
+  let pullForce = new Stick(points[points.length - 1], pullPoint, 0);
+  let mouseForce = new Stick(pullPoint, mousePoint, 5);
+
+  points[0].pinned = true;
+  mousePoint.pinned = true;
+
+  function isTouchEventWithElement(e) {
+    const item = e.changedTouches.item(0);
+    if (canvas === null || item === null) return false;
+    return canvas.getBoundingClientRect().right > item.clientX &&
+      canvas.getBoundingClientRect().left < item.clientX &&
+      canvas.getBoundingClientRect().top < item.clientY &&
+      canvas.getBoundingClientRect().bottom > item.clientY;
+  }
+
+  function updateMouse(grabbed) {
+    activePull = grabbed;
+    sleep = false;
+    timeSincePull = 0;
+  }
+
+  function updateMousePos(e, isTouch = false) {
+    if(!isTouch) {
+      mousePoint.x = e.offsetX;
+      mousePoint.y = e.offsetY;
+      updateMouse(true);
+    }
+    if(isTouch && isTouchEventWithElement(e)) {
+      mousePoint.x = e.changedTouches.item(0).clientX - canvas.getBoundingClientRect().left;
+      mousePoint.y = e.changedTouches.item(0).clientY - canvas.getBoundingClientRect().top;
+      updateMouse(true);
+    }
+  }
+
+  function completeTug() {
+    if (activePull) {
+      activePull = false;
+      timeSincePull = 0;
+
+      prevSkin = localStorage.getItem("minima-ss");
+      let newSkin = 
+        (prevSkin == null || prevSkin != "dark.css")
+        ? "dark.css"
+        : "style.css";
+
+      changeSkin(newSkin);
+      if (window.getSelection)
+        window.getSelection().removeAllRanges();
+      if (document.selection)
+        document.selection.empty();
+    }
+  }
+
+  // Mouse
+  canvas.addEventListener('mousedown', (e) => updateMousePos(e), 0);
+  canvas.addEventListener('mouseup', (e) => updateMouse(false), 0);
+  canvas.addEventListener('mouseout', completeTug, 0);
+  canvas.addEventListener('mousemove', function (e) {
+    if (activePull)
+      updateMousePos(e);
+  }, 0);
+  
+  // Touchscreen
+  canvas.addEventListener('touchstart', (e) => updateMousePos(e, true), 0);
+  canvas.addEventListener('touchcancel', updateMouse(false), 0);
+  canvas.addEventListener('touchend', (e) => updateMouse(false), 0);
+  canvas.addEventListener('touchmove', function (e) {
+    if (activePull) {
+      if (isTouchEventWithElement(e)) {
+        updateMousePos(e, true);
+      }
+      else
+        completeTug();
+    }
+  }, 0);
+
+  
+  function update(deltaTime) {
+    if (!activePull) {
+      timeSincePull += deltaTime;
+      if (timeSincePull > 8) {
+        if (!sleep) {
+          for (let i = 0; i < numPoints; i++) {
+            points[i].x = startX;
+            points[i].y = 5 + (i * segmentLength);
+          }
+          sleep = true;
+        }
+
+        return;
+      }
+      points.forEach((point, pointIx) => {
+        point.x = point.x + (startX - point.x) * (timeSincePull / 6.6) * deltaTime;
+        point.y = point.y + (((5 + (pointIx * segmentLength)) - point.y) * (timeSincePull / 6.6) * deltaTime);
+      });
+    }
+
+    points.forEach(point => {
+      if (!point.pinned) {
+        point.update(deltaTime);
+      }
+    });
+
+    for (let i = 0; i < 10; i++) {
+      for (let ix = 0; ix < sticks.length; ix++) {
+        sticks[ix].constrain();
+
+        if (activePull) {
+          pullForce.constrain();
+          mouseForce.constrain();
+        }
+      }
+      if (activePull) {
+        for (let ix = 0; ix < sticks.length; ix++) {
+          sticks[sticks.length - ix - 1].constrain();
+        }
+      }
+      else {
+        let terminalPoint = points[points.length - 1];
+        terminalPoint.x = terminalPoint.x + (startX - terminalPoint.x) * 0.25 * deltaTime;
+        terminalPoint.y = terminalPoint.y + ((5 + numPoints * segmentLength) - terminalPoint.y) * 0.25 * deltaTime;
+      }
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = window.getComputedStyle(canvas).getPropertyValue('--wire-color');
+    ctx.fillStyle = window.getComputedStyle(canvas).getPropertyValue('--bead-color');
+
+    sticks.forEach(stick => {
+      ctx.beginPath();
+      ctx.moveTo(stick.pointA.x, stick.pointA.y);
+      ctx.lineTo(stick.pointB.x, stick.pointB.y);
+      ctx.stroke();
+    });
+
+    points.forEach(point => {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, beadRadius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    if (clearNavbox) {
+      let navLeft = navbox.getBoundingClientRect().left - canvas.getBoundingClientRect().left;
+      let navTop = navbox.getBoundingClientRect().top - canvas.getBoundingClientRect().top;
+      ctx.clearRect(navLeft, navTop, 500, navbox.getBoundingClientRect().bottom - navbox.getBoundingClientRect().top)
+    }
+  }
+
+  function loop(time) {
+    let deltaTime = (time - lastTime) / 1000;
+    lastTime = time;
+
+    if (!sleep) {
+      update(deltaTime);
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  loop(0);
+</script>
